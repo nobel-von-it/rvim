@@ -4,6 +4,7 @@ local vk = vim.keymap
 local vo = vim.opt
 local vc = vim.cmd
 local vfn = vim.fn
+local va = vim.api
 
 local opts = { silent = true, noremap = true }
 
@@ -14,9 +15,16 @@ vk.set('n', '<leader>e', vc.Ex, opts)
 vk.set('n', '<leader>y', '"+y', opts)
 
 -- Tabs and buffers
-vk.set('n', '<leader>[', vc.BufferNext, opts)
-vk.set('n', '<leader>]', vc.BufferPrev, opts)
+vk.set('n', ']b', vc.BufferNext, opts)
+vk.set('n', '[b', vc.BufferPrev, opts)
 vk.set('n', '<leader>x', vc.BufferClose, opts)
+
+va.nvim_create_autocmd("BufWritePre", {
+  pattern = '*.rs',
+  callback = function ()
+    vc.RustFmt()
+  end
+})
 
 
 
@@ -180,6 +188,10 @@ require'lazy'.setup{
     config = function ()
       vim.g.rustaceanvim = {
         tools = {
+          formatter = {
+            command = 'cargo',
+            args = {'fmt', '--', '--emit=files'}
+          },
           hover_actions = {
             auto_focus = true,
           },
@@ -301,6 +313,28 @@ require'lazy'.setup{
       -- …etc.
     },
     version = '^1.0.0', -- optional: only update when a new 1.x version is released
+  },
+  {
+    'numToStr/Comment.nvim',
+    lazy = false,
+    config = function ()
+      require'Comment'.setup{}
+    end
+  },
+  {
+    'echasnovski/mini.pairs',
+    config = true,
+  },
+  {
+    "Exafunction/codeium.nvim",
+    dependencies = {
+        "nvim-lua/plenary.nvim",
+        "hrsh7th/nvim-cmp",
+    },
+    config = function()
+        require("codeium").setup({
+        })
+    end
   },
 }
 
