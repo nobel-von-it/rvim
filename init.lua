@@ -1,49 +1,54 @@
-vim.g.mapleader=' '
+vim.g.mapleader = ' '
+vim.g.loaded_netrw = 1
+vim.g.loaded_netrwPlugin = 1
 
 local vk = vim.keymap
 local vo = vim.opt
 local vc = vim.cmd
 local vfn = vim.fn
 local va = vim.api
+local vl = vim.lsp
 
 local opts = { silent = true, noremap = true }
 
 -- block with commands
 vk.set('i', 'jk', '<ESC>', opts)
 vk.set('n', '<leader>n', vc.nohl, opts)
-vk.set('n', '<leader>e', vc.Ex, opts)
 vk.set('n', '<leader>y', '"+y', opts)
 
 -- Tabs and buffers
-vk.set('n', ']b', vc.BufferNext, opts)
-vk.set('n', '[b', vc.BufferPrev, opts)
-vk.set('n', '<leader>x', vc.BufferClose, opts)
+-- vk.set('n', ']b', vc.BufferNext, opts)
+-- vk.set('n', '[b', vc.BufferPrev, opts)
+-- vk.set('n', '<leader>x', vc.BufferClose, opts)
+vk.set('n', 'C-k', function()
+  vc("silent! lua vim.lsp.buf.code_action({ only = {'source.fixAll'} })")
+end, opts)
+vk.set('n', '<leader>e', vc.NvimTreeOpen, opts)
+vk.set('n', '<leader>g', vc.Neogit, opts)
 
-va.nvim_create_autocmd("BufWritePre", {
-  pattern = '*.rs',
-  callback = function ()
-    vc.RustFmt()
-  end
-})
+-- Map <Tab> in visual mode to insert a tab at the beginning of each line
+va.nvim_set_keymap('v', '<Tab>', ':<C-u>exec "\'<,\'>normal! I\\t"<CR>', opts)
+va.nvim_set_keymap('v', '<S-Tab>', ':<C-u>exec "\'<,\'>normal! x"<CR>', opts)
 
 
 
 -- block with options
-vo.number=true
-vo.relativenumber=true
-vo.cursorline=true
+vo.number = true
+vo.relativenumber = true
+vo.cursorline = true
+vo.timeoutlen = 200
 
-vo.shiftwidth=2
-vo.tabstop=2
-vo.scrolloff=8
-vo.expandtab=true
-vo.ruler=true
-vo.smarttab=true
-vo.autoindent=true
-vo.lazyredraw=true
+vo.shiftwidth = 2
+vo.tabstop = 2
+vo.scrolloff = 12
+vo.expandtab = true
+vo.ruler = true
+vo.smarttab = true
+vo.autoindent = true
+vo.lazyredraw = true
 
-vo.ignorecase=true
-vo.smartcase=true
+vo.ignorecase = true
+vo.smartcase = true
 vo.swapfile = false
 vo.backup = false
 
@@ -60,17 +65,16 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vo.rtp:prepend(lazypath)
 
-require'lazy'.setup{
+require 'lazy'.setup {
   {
     'nvim-telescope/telescope.nvim', tag = '0.1.6',
     dependencies = { 'nvim-lua/plenary.nvim' },
     config = function()
-      require'telescope'.setup{}
-      local bi = require'telescope.builtin'
+      require 'telescope'.setup {}
+      local bi = require 'telescope.builtin'
       vk.set('n', '<leader>ff', bi.find_files, {})
-      vk.set('n', '<leader>fg', bi.live_grep, {})
-      vk.set('n', '<leader>g', function()
-        bi.grep_string({search = vfn.input('Grep > ')})
+      vk.set('n', '<leader>fg', function()
+        bi.grep_string({ search = vfn.input('Grep > ') })
       end, {})
     end
   },
@@ -80,9 +84,9 @@ require'lazy'.setup{
     config = function()
       vim.wo.foldmethod = 'expr'
       vim.wo.foldexpr = 'nvim_treesitter#foedexpr()'
-      require'nvim-treesitter.configs'.setup{
+      require 'nvim-treesitter.configs'.setup {
         ensure_installed = {
-          'vimdoc', 'rust', 'c', 'lua', 'html', 'css', 'bash'
+          'vimdoc', 'rust', 'c', 'lua', 'html', 'css', 'bash', 'go', 'javascript', 'cpp'
         },
         sync_install = false,
         auto_install = true,
@@ -117,59 +121,98 @@ require'lazy'.setup{
       "j-hui/fidget.nvim",
     },
     config = function()
-      local cmp = require'cmp'
-      local cmpl = require'cmp_nvim_lsp'
+      local cmp = require 'cmp'
+      local cmpl = require 'cmp_nvim_lsp'
       local capabilities = vim.tbl_deep_extend(
         'force',
         {},
-        vim.lsp.protocol.make_client_capabilities(),
+        vl.protocol.make_client_capabilities(),
         cmpl.default_capabilities()
       )
 
-      require'fidget'.setup{}
-      require'mason'.setup{}
-      require'mason-lspconfig'.setup{
+      require 'fidget'.setup {}
+      require 'mason'.setup {}
+      require 'mason-lspconfig'.setup {
         ensure_installed = {
           'lua_ls',
           'rust_analyzer',
           'gopls',
           'clangd',
+          'tsserver',
+          'html',
+          'cssls',
+          'jdtls',
+          'elixirls',
+          'phpactor',
+          'dockerls',
+          'graphql',
+          'jsonls',
+          'perlnavigator',
+          'pyright',
+          'yamlls',
+          'volar',
         },
         handlers = {
-          function (sn)
-            if sn == 'rust_analyzer' or sn == 'rust-analyzer' then
-              return
-            end
-            require'lspconfig'[sn].setup {
-              capabilities = capabilities
+          function(sn)
+            require 'lspconfig'[sn].setup {
+              capabilities = capabilities,
+              on_attach = function(_, bufnr)
+                -- Format and run Clippy before saving the file
+                va.nvim_create_autocmd("BufWritePre", {
+                  buffer = bufnr,
+                  callback = function()
+                    vl.buf.format()
+                  end,
+                })
+              end,
+              -- Add Clippy as a checker
+              settings = {
+                ["rust-analyzer"] = {
+                  checkOnSave = {
+                    command = "clippy"
+                  }
+                }
+              }
             }
           end,
         }
       }
 
-      local select = {behavior = cmp.SelectBehavior.Select}
+      local select = { behavior = cmp.SelectBehavior.Select }
+      vc [[autocmd BufWritePre * lua vim.lsp.buf.format()]]
 
-      cmp.setup{
+      for _, method in ipairs({ 'textDocument/diagnostic', 'workspace/diagnostic' }) do
+        local default_diagnostic_handler = vl.handlers[method]
+        vl.handlers[method] = function(err, result, context, config)
+          if err ~= nil and err.code == -32802 then
+            return
+          end
+          return default_diagnostic_handler(err, result, context, config)
+        end
+      end
+
+
+      cmp.setup {
         snippet = {
           expand = function(args)
-            require'luasnip'.lsp_expand(args.body)
+            require 'luasnip'.lsp_expand(args.body)
           end,
         },
-        mapping = cmp.mapping.preset.insert{
+        mapping = cmp.mapping.preset.insert {
           ['<C-p>'] = cmp.mapping.select_prev_item(select),
           ['<C-n>'] = cmp.mapping.select_next_item(select),
-          ['<C-y>'] = cmp.mapping.confirm({select = true}),
-          ['<CR>'] = cmp.mapping.confirm({select = true}),
+          ['<C-y>'] = cmp.mapping.confirm({ select = true }),
+          ['<CR>'] = cmp.mapping.confirm({ select = true }),
           ['<C-Space>'] = cmp.mapping.complete(),
         },
-        sources = cmp.config.sources{
-          {name = 'nvim_lsp'},
-          {name = 'luasnip'},
-          {name = 'buffer'},
-          {name = 'path'},
+        sources = cmp.config.sources {
+          { name = 'nvim_lsp' },
+          { name = 'luasnip' },
+          { name = 'buffer' },
+          { name = 'path' },
         }
       }
-      vim.diagnostic.config{
+      vim.diagnostic.config {
         float = {
           focusable = false,
           style = 'minimal',
@@ -182,115 +225,30 @@ require'lazy'.setup{
     end
   },
   {
-    'mrcjkb/rustaceanvim',
-    version = '^5', -- Recommended
-    lazy = false, -- This plugin is already lazy
-    config = function ()
-      vim.g.rustaceanvim = {
-        tools = {
-          formatter = {
-            command = 'cargo',
-            args = {'fmt', '--', '--emit=files'}
-          },
-          hover_actions = {
-            auto_focus = true,
-          },
-          inlayHints = {
-            bindingModeHints = {
-              enable = false,
-            },
-            chainingHints = {
-              enable = true,
-            },
-            closingBraceHints = {
-              enable = true,
-              minLines = 25,
-            },
-            closureReturnTypeHints = {
-              enable = "never",
-            },
-            lifetimeElisionHints = {
-              enable = "never",
-              useParameterNames = false,
-            },
-            maxLength = 25,
-            parameterHints = {
-              enable = true,
-            },
-            reborrowHints = {
-              enable = "never",
-            },
-            renderColons = true,
-            typeHints = {
-              enable = true,
-              hideClosureInitialization = false,
-              hideNamedConstructor = false,
-            },
-          }
-        },
-        server = {
-          on_attach = function (_, bufnr)
-            local opt = {silent = true, buffer = bufnr}
-            vk.set('n', '<leader>a', function ()
-              vc.RustLsp('codeAction')
-            end, opt)
-            vk.set('n', '<leader>h', function ()
-              vc.RustLsp({'hover', 'actions'})
-            end, opt)
-            vk.set('n', '<leader>re', function ()
-              vc.RustLsp('explainError')
-            end, opt)
-          end,
-          settings = {
-            ['rust-analyzer'] = {
-              checkOnSave = {
-                enable = true,
-                command = 'clippy'
-              },
-              procMarcro ={
-                enable = true
-              },
-              diagnostic = {
-                enable = true,
-              }
-            }
-          }
-        }
-      }
-    end
-  },
-  {
-    'saecki/crates.nvim',
-    tag = 'stable',
+    "ray-x/go.nvim",
+    dependencies = { -- optional packages
+      "ray-x/guihua.lua",
+      "neovim/nvim-lspconfig",
+      "nvim-treesitter/nvim-treesitter",
+    },
     config = function()
-      local crates = require"crates"
-
-      vk.set("n", "<leader>ct", crates.toggle, opts)
-      vk.set("n", "<leader>cr", crates.reload, opts)
-
-      vk.set("n", "<leader>cv", crates.show_versions_popup, opts)
-      vk.set("n", "<leader>cf", crates.show_features_popup, opts)
-      vk.set("n", "<leader>cd", crates.show_dependencies_popup, opts)
-
-      vk.set("n", "<leader>cu", crates.update_crate, opts)
-      vk.set("v", "<leader>cu", crates.update_crates, opts)
-      vk.set("n", "<leader>ca", crates.update_all_crates, opts)
-      vk.set("n", "<leader>cU", crates.upgrade_crate, opts)
-      vk.set("v", "<leader>cU", crates.upgrade_crates, opts)
-      vk.set("n", "<leader>cA", crates.upgrade_all_crates, opts)
-
-      vk.set("n", "<leader>cx", crates.expand_plain_crate_to_inline_table, opts)
-      vk.set("n", "<leader>cX", crates.extract_crate_into_table, opts)
-
-      vk.set("n", "<leader>cH", crates.open_homepage, opts)
-      vk.set("n", "<leader>cR", crates.open_repository, opts)
-      vk.set("n", "<leader>cD", crates.open_documentation, opts)
-      vk.set("n", "<leader>cC", crates.open_crates_io, opts)
-      vk.set("n", "<leader>cL", crates.open_lib_rs, opts)
-
-      crates.setup{}
+      require("go").setup()
+      vk.set('n', '<leader>aj', vc.GoAddTag, opts)
+      vk.set('n', '<leader>cj', vc.GoClearTag, opts)
+      vk.set('n', '<leader>at', vc.GoAddTest, opts)
+      vk.set('n', '<leader>ie', vc.GoIfErr, opts)
+      vk.set('n', '<leader>fw', vc.GoFillSwitch, opts)
+      vk.set('n', '<leader>ft', vc.GoFillStruct, opts)
     end,
+    event = { "CmdlineEnter" },
+    ft = { "go", 'gomod' },
+    build = ':lua require("go.install").update_all_sync()' -- if you need to install/update all binaries
   },
+  { 'akinsho/toggleterm.nvim', version = "*", config = function()
+    require("toggleterm").setup()
+    vk.set('n', '<C-/>', ":ToggleTerm direction=float<CR>", opts)
+    vk.set('t', '<C-/>', "<C-\\><C-n>:ToggleTerm direction=float<CR>", opts)
+  end },
   {
     "MysticalDevil/inlay-hints.nvim",
     event = "LspAttach",
@@ -299,26 +257,26 @@ require'lazy'.setup{
       require("inlay-hints").setup()
     end
   },
-  {
-    'romgrk/barbar.nvim',
-    dependencies = {
-      'lewis6991/gitsigns.nvim', -- OPTIONAL: for git status
-      'nvim-tree/nvim-web-devicons', -- OPTIONAL: for file icons
-    },
-    init = function() vim.g.barbar_auto_setup = true end,
-    opts = {
-      -- lazy.nvim will automatically call setup for you. put your options here, anything missing will use the default:
-      -- animation = true,
-      -- insert_at_start = true,
-      -- …etc.
-    },
-    version = '^1.0.0', -- optional: only update when a new 1.x version is released
-  },
+  -- {
+  --   'romgrk/barbar.nvim',
+  --   dependencies = {
+  --     'lewis6991/gitsigns.nvim',     -- OPTIONAL: for git status
+  --     'nvim-tree/nvim-web-devicons', -- OPTIONAL: for file icons
+  --   },
+  --   init = function() vim.g.barbar_auto_setup = true end,
+  --   opts = {
+  --     -- lazy.nvim will automatically call setup for you. put your options here, anything missing will use the default:
+  --     -- animation = true,
+  --     -- insert_at_start = true,
+  --     -- …etc.
+  --   },
+  --   version = '^1.0.0', -- optional: only update when a new 1.x version is released
+  -- },
   {
     'numToStr/Comment.nvim',
     lazy = false,
-    config = function ()
-      require'Comment'.setup{}
+    config = function()
+      require 'Comment'.setup {}
     end
   },
   {
@@ -326,15 +284,100 @@ require'lazy'.setup{
     config = true,
   },
   {
+    "NeogitOrg/neogit",
+    dependencies = {
+      "nvim-lua/plenary.nvim",         -- required
+      "sindrets/diffview.nvim",        -- optional - Diff integration
+      -- Only one of these is needed, not both.
+      "nvim-telescope/telescope.nvim", -- optional
+      "ibhagwan/fzf-lua",              -- optional
+    },
+    config = true
+  },
+  { "catppuccin/nvim", name = "catppuccin", priority = 1000, config = function()
+    vc.colorscheme("catppuccin")
+  end },
+  {
     "Exafunction/codeium.nvim",
     dependencies = {
-        "nvim-lua/plenary.nvim",
-        "hrsh7th/nvim-cmp",
+      "nvim-lua/plenary.nvim",
+      "hrsh7th/nvim-cmp",
     },
     config = function()
-        require("codeium").setup({
-        })
+      require("codeium").setup({
+      })
     end
   },
-}
+  -- add this to the file where you setup your other plugins:
+  -- {
+  --   "monkoose/neocodeium",
+  --   event = "VeryLazy",
+  --   config = function()
+  --     local neocodeium = require("neocodeium")
+  --     neocodeium.setup()
+  --     vk.set("i", "<Tab>", neocodeium.accept)
+  --   end,
+  -- },
 
+  -- {
+  --   'luozhiya/fittencode.nvim',
+  --   config = function()
+  --     require('fittencode').setup()
+  --   end,
+  -- },
+  {
+    "nvim-tree/nvim-tree.lua",
+    version = "*",
+    lazy = false,
+    dependencies = {
+      "nvim-tree/nvim-web-devicons",
+    },
+    config = function()
+      require "nvim-tree".setup {
+        view = {
+          width = 30,
+        },
+        filters = {
+          dotfiles = true,
+        }
+      }
+    end,
+  },
+  {
+    "folke/trouble.nvim",
+    opts = {}, -- for default options, refer to the configuration section for custom setup.
+    cmd = "Trouble",
+    keys = {
+      {
+        "<leader>xx",
+        "<cmd>Trouble diagnostics toggle<cr>",
+        desc = "Diagnostics (Trouble)",
+      },
+      {
+        "<leader>xX",
+        "<cmd>Trouble diagnostics toggle filter.buf=0<cr>",
+        desc = "Buffer Diagnostics (Trouble)",
+      },
+      {
+        "<leader>cs",
+        "<cmd>Trouble symbols toggle focus=false<cr>",
+        desc = "Symbols (Trouble)",
+      },
+      {
+        "<leader>cl",
+        "<cmd>Trouble lsp toggle focus=false win.position=right<cr>",
+        desc = "LSP Definitions / references / ... (Trouble)",
+      },
+      {
+        "<leader>xL",
+        "<cmd>Trouble loclist toggle<cr>",
+        desc = "Location List (Trouble)",
+      },
+      {
+        "<leader>xQ",
+        "<cmd>Trouble qflist toggle<cr>",
+        desc = "Quickfix List (Trouble)",
+      },
+    },
+  }
+}
